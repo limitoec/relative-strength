@@ -26,27 +26,30 @@ jobs:
       - name: Run RS Calculation
         run: |
           python relative-strength.py true false ${{ secrets.API_KEY }}
-        
+
       - name: Push to Log Repository
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           
-          # Clone output repository
-          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/limitoec/rs-log.git
+          # 使用 PAT 而不是 GITHUB_TOKEN
+          git clone https://${{ secrets.PAT }}@github.com/limitoec/rs-log.git
           
-          # Update output files
+          # 确保输出目录存在
+          mkdir -p rs-log/output
+          
+          # 更新输出文件
           rm -rf ./rs-log/output/*
           cp -a ./output/. ./rs-log/output/
           
           cd rs-log
           
-          # Add date to commit message (in Chinese)
+          # 添加日期到提交信息
           current_date=$(date '+%Y-%m-%d')
           git add --all
           git commit -m "📊 数据更新: ${current_date}" || echo "No changes detected"
-          git push || echo "Nothing to push"
-
+          git push origin main || echo "Nothing to push"  
+      
       - name: Upload Results
         uses: actions/upload-artifact@v3
         with:
