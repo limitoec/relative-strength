@@ -1,36 +1,63 @@
-name: Output
+name: Daily RS Calculation
 
 on:
-  # push:
-    # branches: [ main ]
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "0 3 * * *"  # UTC 3:00 AM = Beijing 11:00 AM
+  workflow_dispatch:      # Manual trigger enabled
 
 jobs:
-      build:
-        runs-on: ubuntu-latest
+  calculate-rs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
 
-        steps:
-          - name: checkout repo content
-            uses: actions/checkout@v2 # checkout the repository content to github runner.
-          - name: setup python
-            uses: actions/setup-python@v2
-            with:
-              python-version: 3.8 #install the python needed
-          - name: execute py script # aggregate current data
-            run: |
-              python -m pip install -r requirements.txt
-              python relative-strength.py true false ${{ secrets.API_KEY }}
-          - name: push to log git
-            run: |
-              git clone https://skyte:${{ secrets.PAT }}@github.com/skyte/rs-log.git
-              rm ./rs-log/output/* && cp -a ./output/. ./rs-log/output
-              cd rs-log
-              git config user.name "CI" && git config user.email "ci@github.com"
-              git add --all
-              git commit -m "CI output update" || echo "nothing to commit"
-              git push || echo "nothing to push"
-          # - uses: actions/upload-artifact@v2
-          #   with:
-          #     name: rs_stocks.csv
-          #     path: output
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run RS Calculation
+        run: |
+          python relative-strength.py true false ${{ secrets.API_KEY }}
+        
+      - name: Push to Log Repository
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          
+          # Clone output repository
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/limitoec/rs-log.git
+          
+          # Update output files
+          rm -rf ./rs-log/output/*
+          cp -a ./output/. ./rs-log/output/
+          
+          cd rs-log
+          
+          # Add date to commit message (in Chinese)
+          current_date=$(date '+%Y-%m-%d')
+          git add --all
+          git commit -m "📊 数据更新: ${current_date}" || echo "No changes detected"
+          git push || echo "Nothing to push"
+
+      - name: Upload Results
+        uses: actions/upload-artifact@v2
+        with:
+          name: rs-results-${current_date}
+          path: output/
+          
+      - name: Send Notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "✅ 相对强度计算完成 - ${current_date}"
+          else
+            echo "❌ 计算过程出现错误 - ${current_date}"
+          fi
